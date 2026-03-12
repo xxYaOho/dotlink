@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v0.2.1
+
+- 新增发布策略文档 `docs/RELEASE.md`
+- 新增 `link:add` 路径补全能力（Tab + 模糊匹配）
+- 新增路径补全测试
+
 ## v0.2.0
 
 - 完成 M2：模块与链接 CRUD（`module list/create`、`link list/add/remove/update`）
