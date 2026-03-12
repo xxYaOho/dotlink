@@ -8,6 +8,11 @@ dotlink
 
 进入 TUI。
 
+在 TUI 的 `新增链接` 流程中：
+
+- `src` 支持 Tab 补全（模糊匹配）
+- `dst` 支持 Tab 补全（含 `~/` 路径）
+
 ## 子命令
 
 ### module

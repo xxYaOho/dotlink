@@ -5,6 +5,7 @@
 - 默认执行 `dotlink` 进入 TUI
 - 保留 `dotlink <subcommand>` 支持脚本化
 - 配置文件是 SSOT（single source of truth）
+- 在 TUI 的新增链接流程支持 Tab 路径补全（src/dst）
 
 ## 快速开始
 
