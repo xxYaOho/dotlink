@@ -6,6 +6,7 @@
 - 保留 `dotlink <subcommand>` 支持脚本化
 - 配置文件是 SSOT（single source of truth）
 - 在 TUI 的新增链接流程支持 Tab 路径补全（src/dst）
+- 提供 `exec plan/apply/doctor/fix` 执行与自愈命令
 
 ## 快速开始
 

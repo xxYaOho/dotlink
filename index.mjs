@@ -10,6 +10,7 @@ import {
   removeLink,
 } from './src/commands.mjs';
 import { promptPath } from './src/path-prompt.mjs';
+import { runApply, runDoctor, runFix, runPlan } from './src/execute.mjs';
 
 function printBanner() {
   console.log(pc.cyan('dotlink'));
@@ -28,6 +29,10 @@ async function runTui() {
         { value: 'link:list', label: '链接列表' },
         { value: 'link:add', label: '新增链接' },
         { value: 'link:remove', label: '删除链接' },
+        { value: 'exec:plan', label: '执行计划(plan)' },
+        { value: 'exec:apply', label: '执行应用(apply)' },
+        { value: 'exec:doctor', label: '健康检查(doctor)' },
+        { value: 'exec:fix', label: '修复(fix)' },
         { value: 'exit', label: '退出' },
       ],
     });
@@ -64,6 +69,43 @@ async function runTui() {
         const indexRaw = await p.text({ message: 'index(从 1 开始)', placeholder: '例如: 1' });
         if (p.isCancel(indexRaw)) return;
         await removeLink({ module, index: Number(indexRaw) });
+      } else if (action === 'exec:plan') {
+        const mode = await p.select({
+          message: '模式',
+          options: [
+            { value: 'create', label: 'create' },
+            { value: 'update', label: 'update' },
+            { value: 'aggressive', label: 'aggressive' },
+          ],
+          initialValue: 'update',
+        });
+        if (p.isCancel(mode)) return;
+        await runPlan({ mode });
+      } else if (action === 'exec:apply') {
+        const mode = await p.select({
+          message: '模式',
+          options: [
+            { value: 'create', label: 'create' },
+            { value: 'update', label: 'update' },
+            { value: 'aggressive', label: 'aggressive' },
+          ],
+          initialValue: 'update',
+        });
+        if (p.isCancel(mode)) return;
+        await runApply({ mode, dryRun: false });
+      } else if (action === 'exec:doctor') {
+        await runDoctor({});
+      } else if (action === 'exec:fix') {
+        const mode = await p.select({
+          message: '修复模式',
+          options: [
+            { value: 'safe', label: 'safe' },
+            { value: 'aggressive', label: 'aggressive' },
+          ],
+          initialValue: 'safe',
+        });
+        if (p.isCancel(mode)) return;
+        await runFix({ mode, dryRun: false });
       }
     } catch (error) {
       console.error(pc.red(`错误: ${error.message || error}`));

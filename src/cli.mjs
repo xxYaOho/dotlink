@@ -7,6 +7,7 @@ import {
   removeLink,
   updateLink,
 } from './commands.mjs';
+import { runApply, runDoctor, runFix, runPlan } from './execute.mjs';
 
 function parseFlags(args) {
   const flags = {};
@@ -40,6 +41,10 @@ function printHelp() {
   dotlink link add --module <name> --src <path> --dst <path> [--dry-run]
   dotlink link remove --module <name> --index <n> [--dry-run]
   dotlink link update --module <name> --index <n> [--src <path>] [--dst <path>] [--dry-run]
+  dotlink exec plan [--module <name>] [--mode create|update|aggressive]
+  dotlink exec apply [--module <name>] [--mode create|update|aggressive] [--dry-run]
+  dotlink exec doctor [--module <name>]
+  dotlink exec fix [--module <name>] [--mode safe|aggressive] [--dry-run]
 `);
 }
 
@@ -88,6 +93,31 @@ export async function runCli(args) {
       index: Number(flags.index),
       src: flags.src,
       dst: flags.dst,
+      dryRun: Boolean(flags['dry-run']),
+    });
+    return;
+  }
+
+  if (group === 'exec' && action === 'plan') {
+    await runPlan({ module: flags.module, mode: flags.mode || 'update' });
+    return;
+  }
+  if (group === 'exec' && action === 'apply') {
+    await runApply({
+      module: flags.module,
+      mode: flags.mode || 'update',
+      dryRun: Boolean(flags['dry-run']),
+    });
+    return;
+  }
+  if (group === 'exec' && action === 'doctor') {
+    await runDoctor({ module: flags.module });
+    return;
+  }
+  if (group === 'exec' && action === 'fix') {
+    await runFix({
+      module: flags.module,
+      mode: flags.mode || 'safe',
       dryRun: Boolean(flags['dry-run']),
     });
     return;

@@ -31,6 +31,15 @@ dotlink link remove --module <name> --index <n> [--dry-run]
 dotlink link update --module <name> --index <n> [--src <path>] [--dst <path>] [--dry-run]
 ```
 
+### exec
+
+```bash
+dotlink exec plan [--module <name>] [--mode create|update|aggressive]
+dotlink exec apply [--module <name>] [--mode create|update|aggressive] [--dry-run]
+dotlink exec doctor [--module <name>]
+dotlink exec fix [--module <name>] [--mode safe|aggressive] [--dry-run]
+```
+
 ## dry-run
 
 所有写命令支持 `--dry-run`：

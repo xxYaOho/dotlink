@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v0.3.0
+
+- 新增执行链路：`exec plan/apply/doctor/fix`
+- 增加链接状态与动作模型，支持冲突检测
+- 增加 create/update/aggressive 三种执行模式
+- 补充执行链路测试与 M4 计划文档
+
 ## v0.2.1
 
 - 新增发布策略文档 `docs/RELEASE.md`
