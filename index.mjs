@@ -9,6 +9,7 @@ import {
   addLink,
   removeLink,
 } from './src/commands.mjs';
+import { promptPath } from './src/path-prompt.mjs';
 
 function printBanner() {
   console.log(pc.cyan('dotlink'));
@@ -50,10 +51,12 @@ async function runTui() {
       } else if (action === 'link:add') {
         const module = await p.text({ message: '模块名', placeholder: '例如: opencode' });
         if (p.isCancel(module)) return;
-        const src = await p.text({ message: 'src', placeholder: '例如: config/opencode/AGENTS.md' });
-        if (p.isCancel(src)) return;
-        const dst = await p.text({ message: 'dst', placeholder: '例如: ~/.config/opencode/AGENTS.md' });
-        if (p.isCancel(dst)) return;
+        console.log(pc.dim('src 输入支持 Tab 补全（模糊匹配）'));
+        const src = await promptPath({ message: 'src', cwd: process.cwd(), allowHome: false });
+        if (!src) return;
+        console.log(pc.dim('dst 输入支持 Tab 补全（支持 ~/）'));
+        const dst = await promptPath({ message: 'dst', cwd: process.cwd(), allowHome: true });
+        if (!dst) return;
         await addLink({ module, src, dst, dryRun: false });
       } else if (action === 'link:remove') {
         const module = await p.text({ message: '模块名', placeholder: '例如: opencode' });
