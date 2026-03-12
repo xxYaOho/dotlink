@@ -6,6 +6,9 @@
 - `src/cli.mjs`：命令分发和参数解析
 - `src/commands.mjs`：业务命令（M2）
 - `src/store.mjs`：配置读写（M1）
+- `src/execute.mjs` + `src/runtime-links.mjs`：执行与状态检查（M4）
+- `src/completions.mjs`：shell completion 脚本生成（M5）
+- `src/migrate.mjs`：配置迁移（M5）
 
 ## 写入流程
 

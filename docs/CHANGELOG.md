@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v0.4.0
+
+- 新增 `completions` 命令，支持 bash/zsh/fish
+- 新增 `migrate import` 命令，支持 merge/replace 与 dry-run
+- 补充 completion 与 migrate 测试
+- 补充 M5 计划文档与架构说明
+
 ## v0.3.0
 
 - 新增执行链路：`exec plan/apply/doctor/fix`

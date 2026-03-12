@@ -8,6 +8,8 @@ import {
   updateLink,
 } from './commands.mjs';
 import { runApply, runDoctor, runFix, runPlan } from './execute.mjs';
+import { renderCompletion } from './completions.mjs';
+import { migrateImport } from './migrate.mjs';
 
 function parseFlags(args) {
   const flags = {};
@@ -45,6 +47,8 @@ function printHelp() {
   dotlink exec apply [--module <name>] [--mode create|update|aggressive] [--dry-run]
   dotlink exec doctor [--module <name>]
   dotlink exec fix [--module <name>] [--mode safe|aggressive] [--dry-run]
+  dotlink completions <bash|zsh|fish>
+  dotlink migrate import --from <path> [--replace] [--dry-run]
 `);
 }
 
@@ -120,6 +124,35 @@ export async function runCli(args) {
       mode: flags.mode || 'safe',
       dryRun: Boolean(flags['dry-run']),
     });
+    return;
+  }
+
+  if (group === 'completions') {
+    const shell = action;
+    const script = renderCompletion(shell);
+    console.log(script);
+    return;
+  }
+
+  if (group === 'migrate' && action === 'import') {
+    const result = await migrateImport({
+      from: flags.from,
+      replace: Boolean(flags.replace),
+      dryRun: Boolean(flags['dry-run']),
+    });
+    if (!result.changed) {
+      console.log(pc.dim('没有变更'));
+      return;
+    }
+    console.log(result.diff);
+    if (result.dryRun) {
+      console.log(pc.yellow('dry-run: 未写入文件'));
+      return;
+    }
+    if (result.backupPath) {
+      console.log(pc.dim(`已备份: ${result.backupPath}`));
+    }
+    console.log(pc.green(`已写入: ${result.filePath}`));
     return;
   }
 

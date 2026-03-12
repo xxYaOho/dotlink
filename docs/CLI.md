@@ -40,6 +40,20 @@ dotlink exec doctor [--module <name>]
 dotlink exec fix [--module <name>] [--mode safe|aggressive] [--dry-run]
 ```
 
+### completions
+
+```bash
+dotlink completions bash
+dotlink completions zsh
+dotlink completions fish
+```
+
+### migrate
+
+```bash
+dotlink migrate import --from <path> [--replace] [--dry-run]
+```
+
 ## dry-run
 
 所有写命令支持 `--dry-run`：

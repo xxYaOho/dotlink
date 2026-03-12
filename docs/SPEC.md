@@ -31,6 +31,13 @@
 3. 执行动作模型（noop/link/replace/conflict/skip）
 4. create/update/aggressive 三种执行模式
 
+## M5 范围
+
+1. shell completion 生成（bash/zsh/fish）
+2. 迁移命令 `migrate import`
+3. merge/replace 两种迁移模式
+4. 迁移支持 `--dry-run`
+
 ## 配置格式
 
 ```toml
