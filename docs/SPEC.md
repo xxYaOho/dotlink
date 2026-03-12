@@ -11,6 +11,14 @@
 3. 自动备份
 4. 文件锁
 
+## M2 范围
+
+1. `module list/create`
+2. `link list/add/remove/update`
+3. 去重校验
+4. `--dry-run` 预览
+5. 写前 diff
+
 ## 配置格式
 
 ```toml

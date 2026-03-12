@@ -1,6 +1,6 @@
 {
   "name": "dotlink",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Dotfiles symlink config manager with TOML SSOT",
   "bin": {
@@ -12,6 +12,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@clack/prompts": "^1.1.0",
     "diff": "^7.0.0",
     "picocolors": "^1.1.1",
     "smol-toml": "^1.6.0"
