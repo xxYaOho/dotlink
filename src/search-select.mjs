@@ -84,6 +84,7 @@ export async function searchSelect(options) {
     message,
     options: selectOptions,
     maxVisible = 8,
+    returnMeta = false,
   } = options;
 
   return new Promise((resolve) => {
@@ -113,6 +114,10 @@ export async function searchSelect(options) {
       const picked = filtered[cursor];
       render({ state: 'submit', message, options: selectOptions, query, cursor, maxVisible, lastHeightRef });
       cleanup();
+      if (returnMeta) {
+        resolve({ value: picked ? picked.value : CANCEL, query });
+        return;
+      }
       resolve(picked ? picked.value : CANCEL);
     };
 

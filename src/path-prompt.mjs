@@ -2,7 +2,6 @@ import readline from 'readline';
 import { readdirSync } from 'fs';
 import { homedir } from 'os';
 import { resolve, dirname } from 'path';
-import pc from 'picocolors';
 
 const MAX_CANDIDATES = 120;
 const dirCache = new Map();
@@ -76,81 +75,39 @@ export function listPathCandidates(line, options = {}) {
   return candidates;
 }
 
-function clearCurrentLine() {
-  process.stdout.write('\r\x1b[2K');
-}
-
-async function withLoading(message, work) {
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  let i = 0;
-  let intervalId = null;
-  let shown = false;
-  const delayedStart = setTimeout(() => {
-    intervalId = setInterval(() => {
-      shown = true;
-      process.stdout.write(`\r${pc.dim(frames[i % frames.length])} ${pc.dim(message)}`);
-      i += 1;
-    }, 80);
-  }, 120);
-
-  try {
-    return await work();
-  } finally {
-    clearTimeout(delayedStart);
-    if (intervalId) clearInterval(intervalId);
-    if (shown) clearCurrentLine();
-  }
-}
-
-function prewarmPathCache({ cwd, allowHome }) {
-  const targets = [cwd];
-  if (allowHome) targets.push(homedir());
-  for (const dir of targets) {
-    try {
-      const entries = readdirSync(dir, { withFileTypes: true });
-      dirCache.set(dir, entries);
-    } catch {
-    }
-  }
-}
-
 export function promptPath({ message, initialValue = '', cwd = process.cwd(), allowHome = false }) {
-  return withLoading('扫描目录缓存中...', async () => {
-    prewarmPathCache({ cwd, allowHome });
+  return new Promise((resolvePrompt) => {
+    const hadRawMode = Boolean(process.stdin.isTTY && process.stdin.isRaw);
+    if (process.stdin.isTTY && process.stdin.isRaw) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdin.resume();
 
-    return new Promise((resolvePrompt) => {
-      const hadRawMode = Boolean(process.stdin.isTTY && process.stdin.isRaw);
-      if (process.stdin.isTTY && process.stdin.isRaw) {
-        process.stdin.setRawMode(false);
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+      completer: (line) => {
+        const candidates = listPathCandidates(line, { cwd, allowHome });
+        return [candidates, line];
+      },
+    });
+
+    rl.question(`${message}: `, (answer) => {
+      rl.close();
+      if (process.stdin.isTTY && hadRawMode) {
+        process.stdin.setRawMode(true);
       }
-      process.stdin.resume();
+      const value = (answer || initialValue || '').trim();
+      resolvePrompt(value);
+    });
 
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-        terminal: true,
-        completer: (line) => {
-          const candidates = listPathCandidates(line, { cwd, allowHome });
-          return [candidates, line];
-        },
-      });
-
-      rl.question(`${message}: `, (answer) => {
-        rl.close();
-        if (process.stdin.isTTY && hadRawMode) {
-          process.stdin.setRawMode(true);
-        }
-        const value = (answer || initialValue || '').trim();
-        resolvePrompt(value);
-      });
-
-      rl.on('SIGINT', () => {
-        rl.close();
-        if (process.stdin.isTTY && hadRawMode) {
-          process.stdin.setRawMode(true);
-        }
-        resolvePrompt('');
-      });
+    rl.on('SIGINT', () => {
+      rl.close();
+      if (process.stdin.isTTY && hadRawMode) {
+        process.stdin.setRawMode(true);
+      }
+      resolvePrompt('');
     });
   });
 }

@@ -12,7 +12,7 @@
 
 ## 写入流程
 
-1. 读取并校验 `links.toml`
+1. 读取并校验当前配置源（`symlinks.toml` 或 `local.symlinks.toml`）
 2. 应用命令变更
 3. 生成 diff
 4. 若 `--dry-run` 则结束
@@ -22,6 +22,6 @@
 
 ## 设计目标
 
-- SSOT：仅 `links.toml`
+- SSOT：当前选中的 symlinks 配置文件
 - 安全：原子写 + 备份 + 锁
 - 可审计：diff 预览

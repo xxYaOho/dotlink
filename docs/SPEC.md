@@ -2,7 +2,10 @@
 
 ## 目标
 
-`dotlink` 通过 `links.toml` 管理 dotfiles 链接配置。
+`dotlink` 通过 `symlinks.toml` 管理 dotfiles 链接配置。
+
+- 全局配置：`symlinks.toml`
+- 项目本地配置：`local.symlinks.toml`
 
 ## M1 范围
 
@@ -37,6 +40,12 @@
 2. 迁移命令 `migrate import`
 3. merge/replace 两种迁移模式
 4. 迁移支持 `--dry-run`
+
+## 配置源策略
+
+1. 默认使用 global：`symlinks.toml`
+2. 若当前目录存在 `local.symlinks.toml`，TUI 启动时先选择 global/local
+3. `dotlink local` 在当前目录创建 `local.symlinks.toml` 模板
 
 ## 配置格式
 

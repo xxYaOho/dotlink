@@ -10,17 +10,37 @@ import {
   closeSync,
   unlinkSync,
 } from 'fs';
-import { dirname, join } from 'path';
+import { basename, dirname, isAbsolute, join, resolve } from 'path';
+import { homedir } from 'os';
 import { setTimeout as sleep } from 'timers/promises';
 
-const DEFAULT_LINKS_FILE = 'links.toml';
+const DEFAULT_SYMLINKS_FILE = 'symlinks.toml';
+const LOCAL_SYMLINKS_FILE = 'local.symlinks.toml';
+const LEGACY_LINKS_FILE = 'links.toml';
+const ENV_CONFIG_FILE = 'DOTLINK_CONFIG_FILE';
+
+export const STORE_FILES = {
+  global: DEFAULT_SYMLINKS_FILE,
+  local: LOCAL_SYMLINKS_FILE,
+  legacy: LEGACY_LINKS_FILE,
+};
 
 function ensureParentDir(filePath) {
   mkdirSync(dirname(filePath), { recursive: true });
 }
 
-function ensureLinksFile(filePath) {
+function ensureStoreFile(filePath, cwd) {
   if (!existsSync(filePath)) {
+    const fileName = basename(filePath);
+    if (fileName === DEFAULT_SYMLINKS_FILE) {
+      const legacyPath = join(cwd, LEGACY_LINKS_FILE);
+      if (existsSync(legacyPath)) {
+        ensureParentDir(filePath);
+        const legacyRaw = readFileSync(legacyPath, 'utf-8');
+        writeFileSync(filePath, legacyRaw, 'utf-8');
+        return;
+      }
+    }
     ensureParentDir(filePath);
     writeFileSync(filePath, '', 'utf-8');
   }
@@ -81,7 +101,8 @@ function backupPathFor(filePath) {
   const backupDir = join(dirname(filePath), '.dotlink', 'backups');
   mkdirSync(backupDir, { recursive: true });
   const timestamp = new Date().toISOString().replaceAll(':', '-');
-  return join(backupDir, `links.${timestamp}.toml`);
+  const prefix = basename(filePath).replace(/\.toml$/, '');
+  return join(backupDir, `${prefix}.${timestamp}.toml`);
 }
 
 async function withFileLock(filePath, fn) {
@@ -98,37 +119,60 @@ async function withFileLock(filePath, fn) {
       }
     } catch {
       if (Date.now() - startedAt > 5000) {
-        throw new Error('等待文件锁超时: links.toml 可能正在被其他进程写入');
+        throw new Error('等待文件锁超时: symlinks 文件可能正在被其他进程写入');
       }
       await sleep(50);
     }
   }
 }
 
-export function getLinksFilePath(cwd = process.cwd()) {
-  return join(cwd, DEFAULT_LINKS_FILE);
+export function getStorePaths(cwd = process.cwd()) {
+  const home = homedir();
+  return {
+    global: join(home, '.config', 'dotlink', DEFAULT_SYMLINKS_FILE),
+    local: join(cwd, LOCAL_SYMLINKS_FILE),
+    legacy: join(cwd, LEGACY_LINKS_FILE),
+    projectGlobalLegacy: join(cwd, DEFAULT_SYMLINKS_FILE),
+  };
 }
 
-export function readStore(cwd = process.cwd()) {
-  const filePath = getLinksFilePath(cwd);
-  ensureLinksFile(filePath);
+export function resolveStoreFilePath(cwd = process.cwd(), options = {}) {
+  const envPath = process.env[ENV_CONFIG_FILE];
+  if (envPath) {
+    return isAbsolute(envPath) ? envPath : resolve(cwd, envPath);
+  }
+
+  if (options.filePath) {
+    return isAbsolute(options.filePath) ? options.filePath : resolve(cwd, options.filePath);
+  }
+
+  if (options.scope === 'local') {
+    return getStorePaths(cwd).local;
+  }
+
+  return getStorePaths(cwd).global;
+}
+
+export function readStore(cwd = process.cwd(), options = {}) {
+  const filePath = resolveStoreFilePath(cwd, options);
+  ensureStoreFile(filePath, cwd);
   const raw = readFileSync(filePath, 'utf-8');
   const parsed = raw.trim() ? parse(raw) : { module: {} };
   const validated = validateConfig(parsed);
   return { filePath, raw, data: validated };
 }
 
-export function previewDiff(beforeRaw, afterRaw, filePath = 'links.toml') {
+export function previewDiff(beforeRaw, afterRaw, filePath = DEFAULT_SYMLINKS_FILE) {
   return createPatch(filePath, beforeRaw || '', afterRaw || '', 'before', 'after');
 }
 
 export async function writeStore(data, options = {}) {
   const { cwd = process.cwd(), dryRun = false, backup = true } = options;
-  const { filePath, raw: beforeRaw } = readStore(cwd);
+  const { filePath, raw: beforeRaw } = readStore(cwd, options);
   const validated = validateConfig(structuredClone(data));
   const afterRaw = serializeConfig(validated);
   const changed = beforeRaw !== afterRaw;
-  const diff = previewDiff(beforeRaw, afterRaw, 'links.toml');
+  const diff = previewDiff(beforeRaw, afterRaw, basename(filePath));
 
   if (!changed) {
     return { changed: false, diff, filePath, dryRun, backupPath: null };
@@ -140,7 +184,7 @@ export async function writeStore(data, options = {}) {
   return withFileLock(filePath, async () => {
     const current = readFileSync(filePath, 'utf-8');
     if (current !== beforeRaw) {
-      throw new Error('写入前检测到 links.toml 已被其他进程修改，请重试');
+      throw new Error('写入前检测到 symlinks 文件已被其他进程修改，请重试');
     }
     let backupPath = null;
     if (backup && current.trim()) {
@@ -153,4 +197,14 @@ export async function writeStore(data, options = {}) {
     renameSync(tempPath, filePath);
     return { changed: true, diff, filePath, dryRun: false, backupPath };
   });
+}
+
+export function createLocalTemplate(cwd = process.cwd(), { force = false } = {}) {
+  const filePath = join(cwd, LOCAL_SYMLINKS_FILE);
+  if (existsSync(filePath) && !force) {
+    return { filePath, created: false };
+  }
+  const template = `# dotlink local symlinks\n\n[module.sample]\nlinks = [\n  { src = \"path/to/source\", dst = \"~/path/to/target\" },\n]\n`;
+  writeFileSync(filePath, template, 'utf-8');
+  return { filePath, created: true };
 }

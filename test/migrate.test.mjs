@@ -20,7 +20,7 @@ test('migrateImport should merge and dedupe by default', async () => {
         },
       },
     },
-    { cwd },
+    { cwd, scope: 'local' },
   );
 
   const sourcePath = join(cwd, 'source.toml');
@@ -30,8 +30,8 @@ test('migrateImport should merge and dedupe by default', async () => {
     'utf-8',
   );
 
-  await migrateImport({ from: sourcePath, cwd });
-  const data = readStore(cwd).data;
+  await migrateImport({ from: sourcePath, cwd, scope: 'local' });
+  const data = readStore(cwd, { scope: 'local' }).data;
 
   assert.equal(data.module.alpha.links.length, 2);
   assert.equal(data.module.beta.links.length, 1);
@@ -46,9 +46,9 @@ test('migrateImport should support dry-run', async () => {
     'utf-8',
   );
 
-  const result = await migrateImport({ from: sourcePath, cwd, dryRun: true });
+  const result = await migrateImport({ from: sourcePath, cwd, dryRun: true, scope: 'local' });
   assert.equal(result.dryRun, true);
 
-  const data = readStore(cwd).data;
+  const data = readStore(cwd, { scope: 'local' }).data;
   assert.deepEqual(data.module, {});
 });

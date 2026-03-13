@@ -15,8 +15,9 @@ function toAction(status, mode) {
   return 'skip';
 }
 
-function listInspected(module, repoRoot) {
-  const { data } = readStore(repoRoot);
+function listInspected(module, repoRoot, options = {}) {
+  const { scope, filePath } = options;
+  const { data } = readStore(repoRoot, { scope, filePath });
   const runtimeEntries = buildRuntimeEntries(data, { repoRoot, moduleFilter: module });
   return runtimeEntries.map((entry) => inspectEntry(entry));
 }
@@ -37,8 +38,8 @@ function makeSummary(steps) {
   return summary;
 }
 
-export async function runPlan({ module, mode = 'update', repoRoot = process.cwd() }) {
-  const inspected = listInspected(module, repoRoot);
+export async function runPlan({ module, mode = 'update', repoRoot = process.cwd(), scope, filePath }) {
+  const inspected = listInspected(module, repoRoot, { scope, filePath });
   const steps = inspected.map((entry) => ({
     ...entry,
     action: toAction(entry.status, mode),
@@ -84,8 +85,10 @@ export async function runApply({
   mode = 'update',
   dryRun = false,
   repoRoot = process.cwd(),
+  scope,
+  filePath,
 }) {
-  const planned = await runPlan({ module, mode, repoRoot });
+  const planned = await runPlan({ module, mode, repoRoot, scope, filePath });
   if (dryRun) {
     console.log(pc.yellow('dry-run: 未执行实际写入'));
     return planned;
@@ -98,8 +101,8 @@ export async function runApply({
   return planned;
 }
 
-export async function runDoctor({ module, repoRoot = process.cwd() }) {
-  const inspected = listInspected(module, repoRoot);
+export async function runDoctor({ module, repoRoot = process.cwd(), scope, filePath }) {
+  const inspected = listInspected(module, repoRoot, { scope, filePath });
   const summary = {
     ok: 0,
     missing: 0,
@@ -129,7 +132,9 @@ export async function runFix({
   mode = 'safe',
   dryRun = false,
   repoRoot = process.cwd(),
+  scope,
+  filePath,
 }) {
   const applyMode = mode === 'aggressive' ? 'aggressive' : 'update';
-  return runApply({ module, mode: applyMode, dryRun, repoRoot });
+  return runApply({ module, mode: applyMode, dryRun, repoRoot, scope, filePath });
 }

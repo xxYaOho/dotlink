@@ -7,7 +7,7 @@ _dotlink_completions() {
   local cur prev words cword
   _init_completion || return
 
-  local top="module link exec completions migrate"
+  local top="module link exec local completions migrate"
 
   if [[ ${cword} -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "${top}" -- "$cur") )
@@ -26,6 +26,9 @@ _dotlink_completions() {
       ;;
     completions)
       COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
+      ;;
+    local)
+      COMPREPLY=()
       ;;
     migrate)
       COMPREPLY=( $(compgen -W "import" -- "$cur") )
@@ -46,6 +49,7 @@ _dotlink() {
     'module:模块操作'
     'link:链接操作'
     'exec:执行与检查'
+    'local:创建 local.symlinks.toml'
     'completions:生成补全脚本'
     'migrate:迁移配置'
   )
@@ -65,6 +69,9 @@ _dotlink() {
     exec)
       _describe 'exec commands' 'plan:apply:doctor:fix'
       ;;
+    local)
+      _describe 'local commands' ''
+      ;;
     completions)
       _describe 'shell' 'bash:zsh:fish'
       ;;
@@ -83,6 +90,7 @@ function fishScript() {
 complete -c dotlink -f -n '__fish_use_subcommand' -a 'module' -d '模块操作'
 complete -c dotlink -f -n '__fish_use_subcommand' -a 'link' -d '链接操作'
 complete -c dotlink -f -n '__fish_use_subcommand' -a 'exec' -d '执行与检查'
+complete -c dotlink -f -n '__fish_use_subcommand' -a 'local' -d '创建 local.symlinks.toml'
 complete -c dotlink -f -n '__fish_use_subcommand' -a 'completions' -d '生成补全脚本'
 complete -c dotlink -f -n '__fish_use_subcommand' -a 'migrate' -d '迁移配置'
 

@@ -23,10 +23,10 @@ test('runPlan should mark missing dst as link', async () => {
         },
       },
     },
-    { cwd: repoRoot },
+    { cwd: repoRoot, scope: 'local' },
   );
 
-  const result = await runPlan({ repoRoot });
+  const result = await runPlan({ repoRoot, scope: 'local' });
   assert.equal(result.summary.link, 1);
 });
 
@@ -41,10 +41,10 @@ test('runApply should create symlink for missing dst', async () => {
         },
       },
     },
-    { cwd: repoRoot },
+    { cwd: repoRoot, scope: 'local' },
   );
 
-  await runApply({ repoRoot });
+  await runApply({ repoRoot, scope: 'local' });
   assert.equal(existsSync(dst), true);
 });
 
@@ -62,10 +62,10 @@ test('runPlan should mark occupied dst as conflict in update mode', async () => 
         },
       },
     },
-    { cwd: repoRoot },
+    { cwd: repoRoot, scope: 'local' },
   );
 
-  const result = await runPlan({ repoRoot, mode: 'update' });
+  const result = await runPlan({ repoRoot, mode: 'update', scope: 'local' });
   assert.equal(result.summary.conflict, 1);
 });
 
@@ -84,9 +84,9 @@ test('runPlan should mark wrong_target as replace in update mode', async () => {
         },
       },
     },
-    { cwd: repoRoot },
+    { cwd: repoRoot, scope: 'local' },
   );
 
-  const result = await runPlan({ repoRoot, mode: 'update' });
+  const result = await runPlan({ repoRoot, mode: 'update', scope: 'local' });
   assert.equal(result.summary.replace, 1);
 });

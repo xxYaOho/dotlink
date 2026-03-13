@@ -1,6 +1,6 @@
 # dotlink
 
-基于 `links.toml` 的 dotfiles 链接配置管理工具。
+基于 `symlinks.toml` 的 dotfiles 链接配置管理工具。
 
 - 默认执行 `dotlink` 进入 TUI
 - 保留 `dotlink <subcommand>` 支持脚本化
@@ -10,6 +10,9 @@
 - 路径输入时提供“扫描目录缓存中”加载反馈
 - 提供 `exec plan/apply/doctor/fix` 执行与自愈命令
 - 提供 shell completion 生成与 `migrate import` 配置迁移
+- 支持 global/local 配置源（检测到 `local.symlinks.toml` 时可选择）
+  - global: `~/.config/dotlink/symlinks.toml`
+  - local: `<project>/local.symlinks.toml`
 
 ## 快速开始
 
@@ -49,7 +52,10 @@ dotlink exec fix --mode safe
 dotlink completions zsh > ~/.zsh/completions/_dotlink
 
 # 迁移配置
-dotlink migrate import --from ./legacy-links.toml --dry-run
+dotlink migrate import --from ./legacy-symlinks.toml --dry-run
+
+# 在当前目录创建 local.symlinks.toml 模板
+dotlink local
 ```
 
 更多说明见 `docs/`。

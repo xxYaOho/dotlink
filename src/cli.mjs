@@ -10,6 +10,7 @@ import {
 import { runApply, runDoctor, runFix, runPlan } from './execute.mjs';
 import { renderCompletion } from './completions.mjs';
 import { migrateImport } from './migrate.mjs';
+import { createLocalTemplate } from './store.mjs';
 
 function parseFlags(args) {
   const flags = {};
@@ -47,6 +48,7 @@ function printHelp() {
   dotlink exec apply [--module <name>] [--mode create|update|aggressive] [--dry-run]
   dotlink exec doctor [--module <name>]
   dotlink exec fix [--module <name>] [--mode safe|aggressive] [--dry-run]
+  dotlink local
   dotlink completions <bash|zsh|fish>
   dotlink migrate import --from <path> [--replace] [--dry-run]
 `);
@@ -124,6 +126,16 @@ export async function runCli(args) {
       mode: flags.mode || 'safe',
       dryRun: Boolean(flags['dry-run']),
     });
+    return;
+  }
+
+  if (group === 'local') {
+    const result = createLocalTemplate(process.cwd());
+    if (result.created) {
+      console.log(pc.green(`已创建: ${result.filePath}`));
+    } else {
+      console.log(pc.dim(`已存在: ${result.filePath}`));
+    }
     return;
   }
 

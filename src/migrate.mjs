@@ -19,13 +19,15 @@ export async function migrateImport({
   replace = false,
   dryRun = false,
   cwd = process.cwd(),
+  scope,
+  filePath,
 }) {
   if (!from) throw new Error('--from 必填');
 
   const raw = readFileSync(from, 'utf-8');
   const parsed = raw.trim() ? parse(raw) : { module: {} };
   const source = validateConfig(parsed);
-  const target = readStore(cwd).data;
+  const target = readStore(cwd, { scope, filePath }).data;
 
   const next = replace ? { module: {} } : structuredClone(target);
 
@@ -39,6 +41,6 @@ export async function migrateImport({
     next.module[moduleName].links = dedupeLinks(mergedLinks);
   }
 
-  const result = await writeStore(next, { cwd, dryRun });
+  const result = await writeStore(next, { cwd, dryRun, scope, filePath });
   return result;
 }
