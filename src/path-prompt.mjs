@@ -6,6 +6,7 @@ import { resolve, dirname } from 'path';
 const MAX_CANDIDATES = 120;
 const SPINNER_FRAMES = ['|', '/', '-', '\\'];
 const SCAN_TIMEOUT_MS = 60_000;
+const MIN_LOADING_VISIBLE_MS = 300;
 const dirCache = new Map();
 
 function normalizeSlashes(value) {
@@ -18,6 +19,10 @@ export function getPseudoProgressPercent(elapsedMs) {
   if (elapsedMs <= 11_000) return Math.min(90, 80 + Math.floor(((elapsedMs - 1_000) / 10_000) * 10));
   if (elapsedMs <= SCAN_TIMEOUT_MS) return Math.min(100, 90 + Math.floor(((elapsedMs - 11_000) / (SCAN_TIMEOUT_MS - 11_000)) * 10));
   return 100;
+}
+
+export function shouldShowLoading(elapsedMs) {
+  return elapsedMs >= MIN_LOADING_VISIBLE_MS;
 }
 
 function getSpinnerFrame(step) {
@@ -100,13 +105,25 @@ export async function listPathCandidates(line, options = {}) {
     allowHome = false,
     homeDir = getHomeDir(),
     onProgress,
+    now = Date.now,
   } = options;
 
   const { filePart, outputBase, scanDir } = resolveScanContext(line, { cwd, allowHome, homeDir });
 
+  if (!allowHome && (line === '~' || line.startsWith('~/'))) {
+    emitProgress(onProgress, {
+      phase: 'unsupported_home',
+      percent: 100,
+      fromCache: false,
+      frame: getSpinnerFrame(0),
+      timedOut: false,
+    });
+    return [];
+  }
+
   let entries = [];
   let fromCache = false;
-  const startedAt = Date.now();
+  const startedAt = now();
 
   try {
     if (dirCache.has(scanDir)) {
@@ -114,7 +131,6 @@ export async function listPathCandidates(line, options = {}) {
       fromCache = true;
       emitProgress(onProgress, { phase: 'loading', percent: 100, fromCache: true, frame: getSpinnerFrame(0), timedOut: false });
     } else {
-      emitProgress(onProgress, { phase: 'loading', percent: 0, fromCache: false, frame: getSpinnerFrame(0), timedOut: false });
       await new Promise((resolveNext) => setImmediate(resolveNext));
       entries = readdirSync(scanDir, { withFileTypes: true });
       dirCache.set(scanDir, entries);
@@ -130,7 +146,7 @@ export async function listPathCandidates(line, options = {}) {
 
   const total = Math.max(entries.length, 1);
   for (let i = 0; i < entries.length; i += 32) {
-    const elapsedMs = Date.now() - startedAt;
+    const elapsedMs = now() - startedAt;
     if (elapsedMs >= SCAN_TIMEOUT_MS) {
       emitProgress(onProgress, {
         phase: 'timeout',
@@ -143,13 +159,15 @@ export async function listPathCandidates(line, options = {}) {
     }
 
     const chunkPercent = Math.floor((((i + 32) > total ? total : i + 32) / total) * 100);
-    emitProgress(onProgress, {
-      phase: 'loading',
-      percent: Math.min(99, Math.max(chunkPercent, getPseudoProgressPercent(elapsedMs))),
-      fromCache: false,
-      frame: getSpinnerFrame(Math.floor(i / 32)),
-      timedOut: false,
-    });
+    if (shouldShowLoading(elapsedMs)) {
+      emitProgress(onProgress, {
+        phase: 'loading',
+        percent: Math.min(99, Math.max(chunkPercent, getPseudoProgressPercent(elapsedMs))),
+        fromCache: false,
+        frame: getSpinnerFrame(Math.floor(i / 32)),
+        timedOut: false,
+      });
+    }
 
     await new Promise((resolveNext) => setImmediate(resolveNext));
   }
@@ -169,6 +187,7 @@ export function promptPath({ message, initialValue = '', cwd = process.cwd(), al
 
     let loadingLine = '';
     let statusLine = '';
+    let preserveStatus = false;
 
     const renderPrompt = () => {
       const prompt = statusLine
@@ -190,19 +209,32 @@ export function promptPath({ message, initialValue = '', cwd = process.cwd(), al
             if (event.timedOut) {
               loadingLine = `${message} (loading): ${line}`;
               statusLine = `${event.frame} 扫描内容过多，已超时，请缩小路径范围`;
+              preserveStatus = true;
+            } else if (event.phase === 'unsupported_home') {
+              loadingLine = `${message}: ${line}`;
+              statusLine = `${event.frame} src 不支持 ~/，请使用相对路径或绝对路径`;
+              preserveStatus = true;
+            } else if (event.phase === 'error') {
+              loadingLine = `${message}: ${line}`;
+              statusLine = `${event.frame} 未找到可扫描目录，请检查输入路径`;
+              preserveStatus = true;
             } else if (event.fromCache) {
               loadingLine = '';
               statusLine = '';
+              preserveStatus = false;
             } else {
               loadingLine = `${message} (loading): ${line}`;
               statusLine = `${event.frame} ${event.percent}%`;
+              preserveStatus = false;
             }
             renderPrompt();
           },
         });
 
-        loadingLine = '';
-        statusLine = '';
+        if (!preserveStatus) {
+          loadingLine = '';
+          statusLine = '';
+        }
         renderPrompt();
         callback(null, [candidates, line]);
       },
