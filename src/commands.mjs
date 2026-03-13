@@ -121,6 +121,41 @@ export async function removeLink({ module, index, dryRun = false }) {
   printWriteResult(result);
 }
 
+export async function removeLinks({ targets, dryRun = false, repoRoot = process.cwd(), scope, filePath }) {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    throw new Error('targets 必须至少包含一条链接');
+  }
+
+  const { data } = readStore(repoRoot, { scope, filePath });
+  const grouped = new Map();
+
+  for (const target of targets) {
+    const moduleName = requireText('module', target?.module);
+    const oneBasedIndex = requireIndex(target?.index);
+    if (!data.module[moduleName]) {
+      throw new Error(`模块不存在: ${moduleName}`);
+    }
+    const links = data.module[moduleName].links || [];
+    if (!links[oneBasedIndex - 1]) {
+      throw new Error(`index 超出范围: ${moduleName}#${oneBasedIndex}`);
+    }
+
+    const indexes = grouped.get(moduleName) || new Set();
+    indexes.add(oneBasedIndex);
+    grouped.set(moduleName, indexes);
+  }
+
+  for (const [moduleName, indexes] of grouped.entries()) {
+    const links = data.module[moduleName].links || [];
+    for (const oneBasedIndex of Array.from(indexes).sort((a, b) => b - a)) {
+      links.splice(oneBasedIndex - 1, 1);
+    }
+  }
+
+  const result = await writeStore(data, { cwd: repoRoot, dryRun, scope, filePath });
+  printWriteResult(result);
+}
+
 export async function updateLink({ module, index, src, dst, dryRun = false }) {
   const moduleName = requireText('module', module);
   const oneBasedIndex = requireIndex(index);

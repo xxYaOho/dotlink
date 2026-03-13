@@ -9,11 +9,12 @@ import {
   listModules,
   listLinks,
   addLink,
-  removeLink,
+  removeLinks,
 } from './src/commands.mjs';
 import { promptPath } from './src/path-prompt.mjs';
 import { getPathPromptOptions } from './src/path-mode.mjs';
 import { runApply, runDoctor, runFix, runPlan } from './src/execute.mjs';
+import { listRemovableLinkGroups } from './src/link-remove-select.mjs';
 import { STORE_FILES, getStorePaths, readStore } from './src/store.mjs';
 import { searchSelect, selectCancelSymbol } from './src/search-select.mjs';
 
@@ -179,11 +180,40 @@ async function runTui() {
         if (!dst) return;
         await addLink({ module, src, dst, dryRun: false });
       } else if (action === 'link:remove') {
-        const module = await pickModule({ message: '选择模块（支持模糊搜索）' });
-        if (module === null) return;
-        const indexRaw = await p.text({ message: 'index(从 1 开始)', placeholder: '例如: 1' });
-        if (p.isCancel(indexRaw)) return;
-        await removeLink({ module, index: Number(indexRaw) });
+        const groupedOptions = listRemovableLinkGroups({
+          repoRoot: process.cwd(),
+          scope: selectedSource.scope,
+          filePath: selectedSource.filePath,
+        });
+        const totalLinks = Object.values(groupedOptions).reduce((count, items) => count + items.length, 0);
+        if (totalLinks === 0) {
+          console.log(pc.dim('暂无链接'));
+          continue;
+        }
+        const targets = await p.groupMultiselect({
+          message: '选择要删除的链接（可多选）',
+          options: groupedOptions,
+          required: false,
+          groupSpacing: 1,
+        });
+        if (p.isCancel(targets)) return;
+        if (targets.length === 0) {
+          console.log(pc.dim('未选择任何链接'));
+          continue;
+        }
+        const confirmed = await p.confirm({
+          message: `确认删除 ${targets.length} 条链接？`,
+        });
+        if (p.isCancel(confirmed) || !confirmed) {
+          console.log(pc.dim('已取消'));
+          continue;
+        }
+        await removeLinks({
+          targets,
+          repoRoot: process.cwd(),
+          scope: selectedSource.scope,
+          filePath: selectedSource.filePath,
+        });
       } else if (action === 'exec:plan') {
         const mode = await p.select({
           message: '模式',
