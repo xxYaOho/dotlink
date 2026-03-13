@@ -26,6 +26,8 @@
 
 1. `add` 向导路径补全
 2. Tab 触发补全与模糊匹配
+3. 配置源驱动的路径模式提示（global / local）
+4. 慢扫描时显示 loading，快速扫描跳过提示
 
 ## M4 范围
 
@@ -46,6 +48,10 @@
 1. 默认使用 global：`symlinks.toml`
 2. 若当前目录存在 `local.symlinks.toml`，TUI 启动时先选择 global/local
 3. `dotlink local` 在当前目录创建 `local.symlinks.toml` 模板
+4. `link:add` 中的 `src` 路径模式由配置源决定：
+   - global：支持 `~/` / 绝对路径
+   - local：使用项目内相对路径
+5. `dst` 在两种配置源下都支持 `~/` / 绝对路径
 
 ## 配置格式
 
