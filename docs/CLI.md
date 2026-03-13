@@ -1,5 +1,42 @@
 # CLI 指南
 
+## 安装
+
+### 本地开发
+
+在仓库目录执行：
+
+```bash
+npm install
+npm link
+```
+
+之后可以直接运行：
+
+```bash
+dotlink
+```
+
+### 从 GitHub 仓库安装
+
+不发布到 npm 时，可以直接从 GitHub 安装：
+
+```bash
+npm install -g git+https://github.com/<owner>/<repo>.git#main
+```
+
+若要安装稳定版本，建议先打 tag，再安装对应 tag：
+
+```bash
+npm install -g git+https://github.com/<owner>/<repo>.git#v0.5.1
+```
+
+更新后可用下面命令确认：
+
+```bash
+dotlink --help
+```
+
 ## 默认入口
 
 ```bash

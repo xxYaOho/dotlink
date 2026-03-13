@@ -24,6 +24,16 @@
 6. 推送提交：`git push`
 7. 推送标签：`git push --tags`
 
+## 分发方式
+
+当前不依赖 npm registry，默认通过 GitHub 仓库分发。
+
+- 开发阶段：在本地仓库执行 `npm link`
+- 安装最新主分支：`npm install -g git+https://github.com/<owner>/<repo>.git#main`
+- 安装稳定版本：`npm install -g git+https://github.com/<owner>/<repo>.git#vX.Y.Z`
+
+若需要稳定安装体验，推荐每次可用版本都创建 tag，再让使用者按 tag 安装。
+
 ## 提交信息约定
 
 使用中文 Conventional Commits：
