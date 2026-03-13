@@ -20,8 +20,8 @@ test('listPathCandidates should list directory children with prefix', () => {
   assert.ok(values.includes('config/opencode/'));
 });
 
-test('listPathCandidates should support fuzzy match', () => {
+test('listPathCandidates should support contains match', () => {
   const cwd = makeFixture();
-  const values = listPathCandidates('config/opn', { cwd });
+  const values = listPathCandidates('config/enc', { cwd });
   assert.ok(values.includes('config/opencode/'));
 });

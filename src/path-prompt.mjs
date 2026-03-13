@@ -10,23 +10,20 @@ function normalizeSlashes(value) {
   return value.replaceAll('\\', '/');
 }
 
-function fuzzyMatch(name, query) {
+function matchScore(name, query) {
   const n = name.toLowerCase();
   const q = query.toLowerCase();
-  if (!q) return true;
-  if (n.includes(q)) return true;
-  let i = 0;
-  for (const ch of n) {
-    if (ch === q[i]) i += 1;
-    if (i === q.length) return true;
-  }
-  return false;
+  if (!q) return 3;
+  if (n.startsWith(q)) return 3;
+  if (n.includes(q)) return 2;
+  return 0;
 }
 
 export function listPathCandidates(line, options = {}) {
   const {
     cwd = process.cwd(),
     allowHome = false,
+    onProgress,
   } = options;
 
   const input = normalizeSlashes(line || '');
@@ -52,25 +49,46 @@ export function listPathCandidates(line, options = {}) {
   }
 
   let entries = [];
+  let fromCache = false;
   try {
     if (dirCache.has(scanDir)) {
       entries = dirCache.get(scanDir);
+      fromCache = true;
     } else {
       entries = readdirSync(scanDir, { withFileTypes: true });
       dirCache.set(scanDir, entries);
     }
   } catch {
+    onProgress?.(100, false);
     return [];
   }
 
-  const candidates = entries
-    .filter((entry) => fuzzyMatch(entry.name, filePart))
-    .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
-    .map((entry) => {
+  onProgress?.(fromCache ? 100 : 0, fromCache);
+
+  const scored = [];
+  const total = Math.max(entries.length, 1);
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    const score = matchScore(entry.name, filePart);
+    if (score > 0) {
+      scored.push({ entry, score });
+    }
+
+    if (!fromCache && i % 32 === 0) {
+      const percent = Math.min(99, Math.floor(((i + 1) / total) * 100));
+      onProgress?.(percent, false);
+    }
+  }
+
+  const candidates = scored
+    .sort((a, b) => b.score - a.score || Number(b.entry.isDirectory()) - Number(a.entry.isDirectory()) || a.entry.name.localeCompare(b.entry.name))
+    .map(({ entry }) => {
       const base = outputBase ? `${outputBase}/${entry.name}` : entry.name;
       return entry.isDirectory() ? `${base}/` : base;
     })
     .slice(0, MAX_CANDIDATES);
+
+  onProgress?.(100, fromCache);
 
   return candidates;
 }
@@ -83,12 +101,28 @@ export function promptPath({ message, initialValue = '', cwd = process.cwd(), al
     }
     process.stdin.resume();
 
+    let titleSuffix = '';
+    const renderPrompt = () => {
+      rl.setPrompt(`${message}${titleSuffix}: `);
+      rl.prompt(true);
+    };
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       terminal: true,
       completer: (line) => {
-        const candidates = listPathCandidates(line, { cwd, allowHome });
+        const candidates = listPathCandidates(line, {
+          cwd,
+          allowHome,
+          onProgress: (percent, fromCache) => {
+            const cacheTag = fromCache ? 'cached' : 'loading';
+            titleSuffix = ` (${cacheTag} ${percent}%)`;
+            renderPrompt();
+          },
+        });
+        titleSuffix = '';
+        renderPrompt();
         return [candidates, line];
       },
     });

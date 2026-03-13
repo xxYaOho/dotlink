@@ -1,4 +1,6 @@
 node_modules/
 .DS_Store
 links.toml
+symlinks.toml
+local.symlinks.toml
 *.lock
