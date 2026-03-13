@@ -12,6 +12,7 @@ import {
   removeLink,
 } from './src/commands.mjs';
 import { promptPath } from './src/path-prompt.mjs';
+import { getPathPromptOptions } from './src/path-mode.mjs';
 import { runApply, runDoctor, runFix, runPlan } from './src/execute.mjs';
 import { STORE_FILES, getStorePaths, readStore } from './src/store.mjs';
 import { searchSelect, selectCancelSymbol } from './src/search-select.mjs';
@@ -108,6 +109,8 @@ async function runTui() {
   console.log(pc.dim(`当前配置源: ${selectedSource.scope} (${selectedSource.filePath})`));
   console.log('');
 
+  const pathPromptOptions = getPathPromptOptions(selectedSource.scope);
+
   while (true) {
     const action = await p.select({
       message: '选择操作',
@@ -168,11 +171,11 @@ async function runTui() {
       } else if (action === 'link:add') {
         const module = await pickModule({ message: '选择模块（支持模糊搜索）', allowCreate: true });
         if (module === null) return;
-        console.log(pc.dim('src 输入支持 Tab 补全（模糊匹配）'));
-        const src = await promptPath({ message: 'src 输入支持 Tab 补全（模糊匹配）', cwd: process.cwd(), allowHome: false });
+        console.log(pc.dim(pathPromptOptions.src.message));
+        const src = await promptPath({ message: pathPromptOptions.src.message, cwd: process.cwd(), allowHome: pathPromptOptions.src.allowHome });
         if (!src) return;
-        console.log(pc.dim('dst 输入支持 Tab 补全（支持 ~/）'));
-        const dst = await promptPath({ message: 'dst 输入支持 Tab 补全（支持 ~/）', cwd: process.cwd(), allowHome: true });
+        console.log(pc.dim(pathPromptOptions.dst.message));
+        const dst = await promptPath({ message: pathPromptOptions.dst.message, cwd: process.cwd(), allowHome: pathPromptOptions.dst.allowHome });
         if (!dst) return;
         await addLink({ module, src, dst, dryRun: false });
       } else if (action === 'link:remove') {
