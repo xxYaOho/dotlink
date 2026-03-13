@@ -17,6 +17,13 @@ npm link
 dotlink
 ```
 
+如果本地 `npm link` 后出现 `permission denied: dotlink`，说明入口文件缺少可执行位，可执行：
+
+```bash
+chmod +x index.mjs
+npm link
+```
+
 ### 从 GitHub 仓库安装
 
 不发布到 npm 时，可以直接从 GitHub 安装：
@@ -58,8 +65,14 @@ dotlink
 - `dst` 支持 `~/` / 绝对路径 / Tab 补全
 - 扫描只在按下 Tab 时触发，按当前路径层级扫描并匹配
 - 目录扫描超过约 `300ms` 才显示 loading，避免快速扫描时闪烁
-- loading 会显示 ASCII spinner 与伪进度；超时会提示缩小路径范围
+- loading 会显示 dot3 动画与伪进度；超时会提示缩小路径范围
 - 所有模块选择场景支持模糊检索与列表选择
+
+在 TUI 的 `删除链接` 流程中：
+
+- 使用按模块分组的多选列表，不再手动输入 `index`
+- 列表使用简洁状态标记：`[ 🟢 ]` / `[ 🟡 ]` / `[ 🔴 ]`
+- 选中后会先确认，再批量写回配置
 
 ## 子命令
 
@@ -78,6 +91,8 @@ dotlink link add --module <name> --src <path> --dst <path> [--dry-run]
 dotlink link remove --module <name> --index <n> [--dry-run]
 dotlink link update --module <name> --index <n> [--src <path>] [--dst <path>] [--dry-run]
 ```
+
+说明：CLI 子命令仍保留 `--index` 删除方式；多选删除只在默认 TUI 中提供。
 
 ### exec
 
