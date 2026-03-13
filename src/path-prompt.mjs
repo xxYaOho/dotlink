@@ -1,13 +1,27 @@
 import readline from 'readline';
 import { readdirSync } from 'fs';
-import { homedir } from 'os';
+import { homedir as getHomeDir } from 'os';
 import { resolve, dirname } from 'path';
 
 const MAX_CANDIDATES = 120;
+const SPINNER_FRAMES = ['|', '/', '-', '\\'];
+const SCAN_TIMEOUT_MS = 60_000;
 const dirCache = new Map();
 
 function normalizeSlashes(value) {
   return value.replaceAll('\\', '/');
+}
+
+export function getPseudoProgressPercent(elapsedMs) {
+  if (elapsedMs <= 0) return 0;
+  if (elapsedMs <= 1_000) return Math.min(80, Math.floor((elapsedMs / 1_000) * 80));
+  if (elapsedMs <= 11_000) return Math.min(90, 80 + Math.floor(((elapsedMs - 1_000) / 10_000) * 10));
+  if (elapsedMs <= SCAN_TIMEOUT_MS) return Math.min(100, 90 + Math.floor(((elapsedMs - 11_000) / (SCAN_TIMEOUT_MS - 11_000)) * 10));
+  return 100;
+}
+
+function getSpinnerFrame(step) {
+  return SPINNER_FRAMES[step % SPINNER_FRAMES.length];
 }
 
 function matchScore(name, query) {
@@ -19,11 +33,11 @@ function matchScore(name, query) {
   return 0;
 }
 
-export function listPathCandidates(line, options = {}) {
+function resolveScanContext(line, options = {}) {
   const {
     cwd = process.cwd(),
     allowHome = false,
-    onProgress,
+    homeDir = getHomeDir(),
   } = options;
 
   const input = normalizeSlashes(line || '');
@@ -37,9 +51,8 @@ export function listPathCandidates(line, options = {}) {
   if (allowHome && (input === '~' || input.startsWith('~/'))) {
     const suffix = input === '~' ? '' : input.slice(2);
     const suffixDir = hasSlash ? suffix : dirname(suffix);
-    scanDir = resolve(homedir(), suffixDir === '.' ? '' : suffixDir);
-    outputBase = `~/${suffixDir === '.' ? '' : suffixDir}`;
-    outputBase = outputBase.replace(/\/$/, '');
+    scanDir = resolve(homeDir, suffixDir === '.' ? '' : suffixDir);
+    outputBase = `~/${suffixDir === '.' ? '' : suffixDir}`.replace(/\/$/, '');
   } else if (input.startsWith('/')) {
     scanDir = resolve('/', inputDir === '.' ? '' : inputDir);
     outputBase = inputDir === '.' ? '' : inputDir;
@@ -48,48 +61,101 @@ export function listPathCandidates(line, options = {}) {
     outputBase = inputDir === '.' ? '' : inputDir;
   }
 
-  let entries = [];
-  let fromCache = false;
-  try {
-    if (dirCache.has(scanDir)) {
-      entries = dirCache.get(scanDir);
-      fromCache = true;
-    } else {
-      entries = readdirSync(scanDir, { withFileTypes: true });
-      dirCache.set(scanDir, entries);
-    }
-  } catch {
-    onProgress?.(100, false);
-    return [];
-  }
+  return {
+    filePart,
+    outputBase,
+    scanDir,
+  };
+}
 
-  onProgress?.(fromCache ? 100 : 0, fromCache);
-
+function buildCandidates(entries, filePart, outputBase) {
   const scored = [];
-  const total = Math.max(entries.length, 1);
-  for (let i = 0; i < entries.length; i += 1) {
-    const entry = entries[i];
+
+  for (const entry of entries) {
     const score = matchScore(entry.name, filePart);
     if (score > 0) {
       scored.push({ entry, score });
     }
-
-    if (!fromCache && i % 32 === 0) {
-      const percent = Math.min(99, Math.floor(((i + 1) / total) * 100));
-      onProgress?.(percent, false);
-    }
   }
 
-  const candidates = scored
+  const hasPrefixMatch = scored.some((item) => item.score === 3);
+  const filtered = hasPrefixMatch ? scored.filter((item) => item.score === 3) : scored;
+
+  return filtered
     .sort((a, b) => b.score - a.score || Number(b.entry.isDirectory()) - Number(a.entry.isDirectory()) || a.entry.name.localeCompare(b.entry.name))
     .map(({ entry }) => {
       const base = outputBase ? `${outputBase}/${entry.name}` : entry.name;
       return entry.isDirectory() ? `${base}/` : base;
     })
     .slice(0, MAX_CANDIDATES);
+}
 
-  onProgress?.(100, fromCache);
+function emitProgress(onProgress, payload) {
+  onProgress?.(payload);
+}
 
+export async function listPathCandidates(line, options = {}) {
+  const {
+    cwd = process.cwd(),
+    allowHome = false,
+    homeDir = getHomeDir(),
+    onProgress,
+  } = options;
+
+  const { filePart, outputBase, scanDir } = resolveScanContext(line, { cwd, allowHome, homeDir });
+
+  let entries = [];
+  let fromCache = false;
+  const startedAt = Date.now();
+
+  try {
+    if (dirCache.has(scanDir)) {
+      entries = dirCache.get(scanDir);
+      fromCache = true;
+      emitProgress(onProgress, { phase: 'loading', percent: 100, fromCache: true, frame: getSpinnerFrame(0), timedOut: false });
+    } else {
+      emitProgress(onProgress, { phase: 'loading', percent: 0, fromCache: false, frame: getSpinnerFrame(0), timedOut: false });
+      await new Promise((resolveNext) => setImmediate(resolveNext));
+      entries = readdirSync(scanDir, { withFileTypes: true });
+      dirCache.set(scanDir, entries);
+    }
+  } catch {
+    emitProgress(onProgress, { phase: 'error', percent: 100, fromCache: false, frame: getSpinnerFrame(0), timedOut: false });
+    return [];
+  }
+
+  if (fromCache) {
+    return buildCandidates(entries, filePart, outputBase);
+  }
+
+  const total = Math.max(entries.length, 1);
+  for (let i = 0; i < entries.length; i += 32) {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs >= SCAN_TIMEOUT_MS) {
+      emitProgress(onProgress, {
+        phase: 'timeout',
+        percent: 100,
+        fromCache: false,
+        frame: getSpinnerFrame(Math.floor(i / 32)),
+        timedOut: true,
+      });
+      return [];
+    }
+
+    const chunkPercent = Math.floor((((i + 32) > total ? total : i + 32) / total) * 100);
+    emitProgress(onProgress, {
+      phase: 'loading',
+      percent: Math.min(99, Math.max(chunkPercent, getPseudoProgressPercent(elapsedMs))),
+      fromCache: false,
+      frame: getSpinnerFrame(Math.floor(i / 32)),
+      timedOut: false,
+    });
+
+    await new Promise((resolveNext) => setImmediate(resolveNext));
+  }
+
+  const candidates = buildCandidates(entries, filePart, outputBase);
+  emitProgress(onProgress, { phase: 'done', percent: 100, fromCache: false, frame: getSpinnerFrame(entries.length), timedOut: false });
   return candidates;
 }
 
@@ -101,9 +167,14 @@ export function promptPath({ message, initialValue = '', cwd = process.cwd(), al
     }
     process.stdin.resume();
 
-    let titleSuffix = '';
+    let loadingLine = '';
+    let statusLine = '';
+
     const renderPrompt = () => {
-      rl.setPrompt(`${message}${titleSuffix}: `);
+      const prompt = statusLine
+        ? `${loadingLine || message}\n${statusLine}\n`
+        : `${message}: `;
+      rl.setPrompt(prompt);
       rl.prompt(true);
     };
 
@@ -111,19 +182,29 @@ export function promptPath({ message, initialValue = '', cwd = process.cwd(), al
       input: process.stdin,
       output: process.stdout,
       terminal: true,
-      completer: (line) => {
-        const candidates = listPathCandidates(line, {
+      completer: async (line, callback) => {
+        const candidates = await listPathCandidates(line, {
           cwd,
           allowHome,
-          onProgress: (percent, fromCache) => {
-            const cacheTag = fromCache ? 'cached' : 'loading';
-            titleSuffix = ` (${cacheTag} ${percent}%)`;
+          onProgress: (event) => {
+            if (event.timedOut) {
+              loadingLine = `${message} (loading): ${line}`;
+              statusLine = `${event.frame} 扫描内容过多，已超时，请缩小路径范围`;
+            } else if (event.fromCache) {
+              loadingLine = '';
+              statusLine = '';
+            } else {
+              loadingLine = `${message} (loading): ${line}`;
+              statusLine = `${event.frame} ${event.percent}%`;
+            }
             renderPrompt();
           },
         });
-        titleSuffix = '';
+
+        loadingLine = '';
+        statusLine = '';
         renderPrompt();
-        return [candidates, line];
+        callback(null, [candidates, line]);
       },
     });
 

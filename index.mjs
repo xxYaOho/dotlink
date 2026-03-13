@@ -168,11 +168,11 @@ async function runTui() {
       } else if (action === 'link:add') {
         const module = await pickModule({ message: '选择模块（支持模糊搜索）', allowCreate: true });
         if (module === null) return;
-        console.log(pc.dim('src 输入支持 Tab 补全（模糊匹配）(loading on Tab)'));
-        const src = await promptPath({ message: 'src 输入支持 Tab 补全（模糊匹配）(loading)', cwd: process.cwd(), allowHome: false });
+        console.log(pc.dim('src 输入支持 Tab 补全（模糊匹配）'));
+        const src = await promptPath({ message: 'src 输入支持 Tab 补全（模糊匹配）', cwd: process.cwd(), allowHome: false });
         if (!src) return;
-        console.log(pc.dim('dst 输入支持 Tab 补全（支持 ~/）(loading on Tab)'));
-        const dst = await promptPath({ message: 'dst 输入支持 Tab 补全（支持 ~/）(loading)', cwd: process.cwd(), allowHome: true });
+        console.log(pc.dim('dst 输入支持 Tab 补全（支持 ~/）'));
+        const dst = await promptPath({ message: 'dst 输入支持 Tab 补全（支持 ~/）', cwd: process.cwd(), allowHome: true });
         if (!dst) return;
         await addLink({ module, src, dst, dryRun: false });
       } else if (action === 'link:remove') {
