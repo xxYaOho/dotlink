@@ -6,6 +6,8 @@
 - 保留 `dotlink <subcommand>` 支持脚本化
 - 配置文件是 SSOT（single source of truth）
 - 在 TUI 的新增链接流程支持 Tab 路径补全（src/dst）
+- TUI 中所有模块选择场景支持“模糊检索 + 列表选择”
+- 路径输入时提供“扫描目录缓存中”加载反馈
 - 提供 `exec plan/apply/doctor/fix` 执行与自愈命令
 - 提供 shell completion 生成与 `migrate import` 配置迁移
 
@@ -51,3 +53,5 @@ dotlink migrate import --from ./legacy-links.toml --dry-run
 ```
 
 更多说明见 `docs/`。
+
+- completion 安装参考：`docs/COMPLETIONS.md`

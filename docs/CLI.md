@@ -12,6 +12,8 @@ dotlink
 
 - `src` 支持 Tab 补全（模糊匹配）
 - `dst` 支持 Tab 补全（含 `~/` 路径）
+- 首次进入路径输入时会显示“扫描目录缓存中”加载反馈
+- 所有模块选择场景支持模糊检索与列表选择
 
 ## 子命令
 
@@ -47,6 +49,8 @@ dotlink completions bash
 dotlink completions zsh
 dotlink completions fish
 ```
+
+安装示例见 `docs/COMPLETIONS.md`。
 
 ### migrate
 

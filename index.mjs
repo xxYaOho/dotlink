@@ -11,6 +11,50 @@ import {
 } from './src/commands.mjs';
 import { promptPath } from './src/path-prompt.mjs';
 import { runApply, runDoctor, runFix, runPlan } from './src/execute.mjs';
+import { readStore } from './src/store.mjs';
+import { searchSelect, selectCancelSymbol } from './src/search-select.mjs';
+
+function getModuleNames() {
+  const { data } = readStore();
+  return Object.keys(data.module || {}).sort((a, b) => a.localeCompare(b));
+}
+
+async function pickModule({ message, allowAll = false, allowCreate = false }) {
+  const modules = getModuleNames();
+  const options = [];
+
+  if (allowAll) {
+    options.push({ value: '__ALL__', label: '(全部模块)', hint: '不筛选模块' });
+  }
+  for (const moduleName of modules) {
+    options.push({ value: moduleName, label: moduleName });
+  }
+
+  if (options.length === 0) {
+    if (!allowCreate) return null;
+    const created = await p.text({ message: '新模块名', placeholder: '例如: opencode' });
+    if (p.isCancel(created)) return null;
+    return created;
+  }
+
+  if (allowCreate) {
+    options.unshift({ value: '__NEW__', label: '(新建模块...)', hint: '输入新模块名' });
+  }
+
+  const picked = await searchSelect({
+    message,
+    options,
+    maxVisible: 10,
+  });
+
+  if (picked === selectCancelSymbol) return null;
+  if (picked === '__NEW__') {
+    const created = await p.text({ message: '新模块名', placeholder: '例如: opencode' });
+    if (p.isCancel(created)) return null;
+    return created;
+  }
+  return picked === '__ALL__' ? undefined : picked;
+}
 
 function printBanner() {
   console.log(pc.cyan('dotlink'));
@@ -46,16 +90,30 @@ async function runTui() {
       if (action === 'module:list') {
         await listModules({});
       } else if (action === 'module:create') {
-        const name = await p.text({ message: '模块名', placeholder: '例如: opencode' });
+        const modules = getModuleNames();
+        if (modules.length > 0) {
+          const picked = await searchSelect({
+            message: '选择已有模块，或输入新名字继续创建',
+            options: [{ value: '__NEW__', label: '(新建模块...)', hint: '输入新模块名' }, ...modules.map((m) => ({ value: m, label: m, hint: '已存在' }))],
+            maxVisible: 10,
+          });
+          if (picked === selectCancelSymbol) return;
+          if (picked !== '__NEW__') {
+            console.log(pc.yellow(`模块已存在: ${picked}`));
+            continue;
+          }
+        }
+
+        const name = await p.text({ message: '新模块名', placeholder: '例如: opencode' });
         if (p.isCancel(name)) return;
         await createModule({ name });
       } else if (action === 'link:list') {
-        const module = await p.text({ message: '模块名(可空)', placeholder: '留空=全部' });
-        if (p.isCancel(module)) return;
-        await listLinks({ module: module || undefined });
+        const module = await pickModule({ message: '选择模块（支持模糊搜索）', allowAll: true });
+        if (module === null) return;
+        await listLinks({ module });
       } else if (action === 'link:add') {
-        const module = await p.text({ message: '模块名', placeholder: '例如: opencode' });
-        if (p.isCancel(module)) return;
+        const module = await pickModule({ message: '选择模块（支持模糊搜索）', allowCreate: true });
+        if (module === null) return;
         console.log(pc.dim('src 输入支持 Tab 补全（模糊匹配）'));
         const src = await promptPath({ message: 'src', cwd: process.cwd(), allowHome: false });
         if (!src) return;
@@ -64,8 +122,8 @@ async function runTui() {
         if (!dst) return;
         await addLink({ module, src, dst, dryRun: false });
       } else if (action === 'link:remove') {
-        const module = await p.text({ message: '模块名', placeholder: '例如: opencode' });
-        if (p.isCancel(module)) return;
+        const module = await pickModule({ message: '选择模块（支持模糊搜索）' });
+        if (module === null) return;
         const indexRaw = await p.text({ message: 'index(从 1 开始)', placeholder: '例如: 1' });
         if (p.isCancel(indexRaw)) return;
         await removeLink({ module, index: Number(indexRaw) });
