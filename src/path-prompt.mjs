@@ -1,12 +1,12 @@
 import readline from 'readline';
-import { readdirSync } from 'fs';
+import { readdir } from 'fs/promises';
 import { homedir as getHomeDir } from 'os';
 import { resolve, dirname } from 'path';
 
 const MAX_CANDIDATES = 120;
-const SPINNER_FRAMES = ['|', '/', '-', '\\'];
 const SCAN_TIMEOUT_MS = 60_000;
 const MIN_LOADING_VISIBLE_MS = 300;
+const LOADING_TICK_MS = 120;
 const dirCache = new Map();
 
 function normalizeSlashes(value) {
@@ -25,8 +25,31 @@ export function shouldShowLoading(elapsedMs) {
   return elapsedMs >= MIN_LOADING_VISIBLE_MS;
 }
 
-function getSpinnerFrame(step) {
-  return SPINNER_FRAMES[step % SPINNER_FRAMES.length];
+export function getDot3Frame(step) {
+  return '.'.repeat((step % 3) + 1).padEnd(3, ' ');
+}
+
+export function getCommonPrefix(values) {
+  const items = values.filter(Boolean);
+  if (items.length === 0) return '';
+  let prefix = items[0];
+  for (let i = 1; i < items.length; i += 1) {
+    while (prefix && !items[i].startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+    }
+    if (!prefix) break;
+  }
+  return prefix;
+}
+
+export function shouldListCandidatesImmediately(candidates, completeOn) {
+  if (!candidates || candidates.length <= 1) return false;
+  const prefix = getCommonPrefix(candidates);
+  return prefix.length <= completeOn.length && completeOn.startsWith(prefix);
+}
+
+export function formatCandidatePreview(candidates) {
+  return candidates.join('\n');
 }
 
 function matchScore(name, query) {
@@ -106,6 +129,8 @@ export async function listPathCandidates(line, options = {}) {
     homeDir = getHomeDir(),
     onProgress,
     now = Date.now,
+    readDir = (target) => readdir(target, { withFileTypes: true }),
+    sleep = (ms) => new Promise((resolveNext) => setTimeout(resolveNext, ms)),
   } = options;
 
   const { filePart, outputBase, scanDir } = resolveScanContext(line, { cwd, allowHome, homeDir });
@@ -115,7 +140,7 @@ export async function listPathCandidates(line, options = {}) {
       phase: 'unsupported_home',
       percent: 100,
       fromCache: false,
-      frame: getSpinnerFrame(0),
+      frame: getDot3Frame(0),
       timedOut: false,
     });
     return [];
@@ -124,19 +149,69 @@ export async function listPathCandidates(line, options = {}) {
   let entries = [];
   let fromCache = false;
   const startedAt = now();
+  let loadingShown = false;
 
   try {
     if (dirCache.has(scanDir)) {
       entries = dirCache.get(scanDir);
       fromCache = true;
-      emitProgress(onProgress, { phase: 'loading', percent: 100, fromCache: true, frame: getSpinnerFrame(0), timedOut: false });
+      emitProgress(onProgress, { phase: 'loading', percent: 100, fromCache: true, frame: getDot3Frame(2), timedOut: false });
     } else {
-      await new Promise((resolveNext) => setImmediate(resolveNext));
-      entries = readdirSync(scanDir, { withFileTypes: true });
+      let readResolved = false;
+      const readDirPromise = Promise.resolve(readDir(scanDir)).then((value) => {
+        readResolved = true;
+        return value;
+      });
+      const thresholdResult = await Promise.race([
+        readDirPromise.then((value) => ({ type: 'entries', value })),
+        sleep(MIN_LOADING_VISIBLE_MS).then(() => ({ type: 'threshold' })),
+      ]);
+
+      if (thresholdResult.type === 'entries') {
+        entries = thresholdResult.value;
+      } else {
+        loadingShown = true;
+        let loadingStep = 0;
+        emitProgress(onProgress, {
+          phase: 'loading',
+          percent: Math.min(99, getPseudoProgressPercent(now() - startedAt)),
+          fromCache: false,
+          frame: getDot3Frame(loadingStep),
+          timedOut: false,
+        });
+
+        while (!readResolved) {
+          const elapsedMs = now() - startedAt;
+          if (elapsedMs >= SCAN_TIMEOUT_MS) {
+            emitProgress(onProgress, {
+              phase: 'timeout',
+              percent: 100,
+              fromCache: false,
+              frame: getDot3Frame(loadingStep),
+              timedOut: true,
+            });
+            return [];
+          }
+
+          await sleep(LOADING_TICK_MS);
+          if (readResolved) break;
+          loadingStep += 1;
+          emitProgress(onProgress, {
+            phase: 'loading',
+            percent: Math.min(99, getPseudoProgressPercent(now() - startedAt)),
+            fromCache: false,
+            frame: getDot3Frame(loadingStep),
+            timedOut: false,
+          });
+        }
+
+        entries = await readDirPromise;
+      }
+
       dirCache.set(scanDir, entries);
     }
   } catch {
-    emitProgress(onProgress, { phase: 'error', percent: 100, fromCache: false, frame: getSpinnerFrame(0), timedOut: false });
+    emitProgress(onProgress, { phase: 'error', percent: 100, fromCache: false, frame: getDot3Frame(0), timedOut: false });
     return [];
   }
 
@@ -144,36 +219,8 @@ export async function listPathCandidates(line, options = {}) {
     return buildCandidates(entries, filePart, outputBase);
   }
 
-  const total = Math.max(entries.length, 1);
-  for (let i = 0; i < entries.length; i += 32) {
-    const elapsedMs = now() - startedAt;
-    if (elapsedMs >= SCAN_TIMEOUT_MS) {
-      emitProgress(onProgress, {
-        phase: 'timeout',
-        percent: 100,
-        fromCache: false,
-        frame: getSpinnerFrame(Math.floor(i / 32)),
-        timedOut: true,
-      });
-      return [];
-    }
-
-    const chunkPercent = Math.floor((((i + 32) > total ? total : i + 32) / total) * 100);
-    if (shouldShowLoading(elapsedMs)) {
-      emitProgress(onProgress, {
-        phase: 'loading',
-        percent: Math.min(99, Math.max(chunkPercent, getPseudoProgressPercent(elapsedMs))),
-        fromCache: false,
-        frame: getSpinnerFrame(Math.floor(i / 32)),
-        timedOut: false,
-      });
-    }
-
-    await new Promise((resolveNext) => setImmediate(resolveNext));
-  }
-
   const candidates = buildCandidates(entries, filePart, outputBase);
-  emitProgress(onProgress, { phase: 'done', percent: 100, fromCache: false, frame: getSpinnerFrame(entries.length), timedOut: false });
+  emitProgress(onProgress, { phase: 'done', percent: 100, fromCache: false, frame: loadingShown ? getDot3Frame(2) : '', timedOut: false });
   return candidates;
 }
 
@@ -235,6 +282,13 @@ export function promptPath({ message, initialValue = '', cwd = process.cwd(), al
           loadingLine = '';
           statusLine = '';
         }
+
+        const shouldPreview = shouldListCandidatesImmediately(candidates, line);
+        const preview = shouldPreview ? formatCandidatePreview(candidates) : '';
+        if (preview) {
+          process.stdout.write(`\r\n${preview}\r\n`);
+        }
+
         renderPrompt();
         callback(null, [candidates, line]);
       },

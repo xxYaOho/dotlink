@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { getPseudoProgressPercent, listPathCandidates, shouldShowLoading } from '../src/path-prompt.mjs';
+import {
+  formatCandidatePreview,
+  getCommonPrefix,
+  getDot3Frame,
+  getPseudoProgressPercent,
+  listPathCandidates,
+  shouldListCandidatesImmediately,
+  shouldShowLoading,
+} from '../src/path-prompt.mjs';
 
 function makeFixture() {
   const root = mkdtempSync(join(tmpdir(), 'dotlink-path-'));
@@ -53,26 +61,34 @@ test('listPathCandidates should expand tilde paths when home paths are allowed',
 });
 
 test('listPathCandidates should emit loading progress before uncached scans and cached state afterwards', async () => {
-  const cwd = makeFixture();
-  const homeDir = join(cwd, 'home');
   const firstEvents = [];
   const secondEvents = [];
+  let resolveRead;
+  let readCount = 0;
 
-  await listPathCandidates('~/workspace/RE', {
-    cwd,
-    allowHome: true,
-    homeDir,
-    now: (() => {
-      const values = [0, 350];
-      return () => values.shift() ?? 350;
-    })(),
+  const readDir = () => {
+    readCount += 1;
+    return new Promise((resolve) => {
+      resolveRead = () => resolve([
+        { name: 'README.md', isDirectory: () => false },
+      ]);
+    });
+  };
+  let sleepCount = 0;
+
+  await listPathCandidates('docs/RE', {
+    cwd: '/tmp',
+    readDir,
+    sleep: async () => {
+      sleepCount += 1;
+      if (sleepCount === 2) resolveRead();
+    },
     onProgress: (event) => firstEvents.push(event),
   });
 
-  await listPathCandidates('~/workspace/RE', {
-    cwd,
-    allowHome: true,
-    homeDir,
+  await listPathCandidates('docs/RE', {
+    cwd: '/tmp',
+    readDir,
     onProgress: (event) => secondEvents.push(event),
   });
 
@@ -80,6 +96,7 @@ test('listPathCandidates should emit loading progress before uncached scans and 
   assert.equal(firstEvents.at(-1)?.percent, 100);
   assert.equal(secondEvents[0]?.fromCache, true);
   assert.equal(secondEvents[0]?.percent, 100);
+  assert.equal(readCount, 1);
 });
 
 test('listPathCandidates should report unsupported home paths when home expansion is disabled', async () => {
@@ -112,23 +129,54 @@ test('listPathCandidates should skip loading updates for scans faster than 300ms
   assert.ok(!events.some((event) => event.phase === 'loading'));
 });
 
-test('listPathCandidates should start loading updates once scan exceeds 300ms', async () => {
-  const cwd = makeFixture();
-  for (let i = 0; i < 80; i += 1) {
-    writeFileSync(join(cwd, 'config', `entry-${i}.md`), '# item\n', 'utf-8');
-  }
+test('listPathCandidates should use dot3 frames while slow async scans are pending', async () => {
   const events = [];
+  let resolveRead;
+  let sleepCount = 0;
 
-  await listPathCandidates('config/op', {
-    cwd,
-    now: (() => {
-      const values = [0, 100, 350, 500, 650];
-      return () => values.shift() ?? 650;
-    })(),
+  await listPathCandidates('docs/RE', {
+    cwd: '/tmp',
+    readDir: () => new Promise((resolve) => {
+      resolveRead = () => resolve([
+        { name: 'README.md', isDirectory: () => false },
+      ]);
+    }),
+    sleep: async () => {
+      sleepCount += 1;
+      if (sleepCount === 4) resolveRead();
+    },
     onProgress: (event) => events.push(event),
   });
 
+  const frames = events.filter((event) => event.phase === 'loading').map((event) => event.frame);
+  assert.ok(frames.length >= 1);
+  assert.ok(frames.every((frame) => ['.  ', '.. ', '...'].includes(frame)));
+});
+
+test('listPathCandidates should emit loading before slow async scans finish', async () => {
+  const events = [];
+  let resolveRead;
+  const readDir = () => new Promise((resolve) => {
+    resolveRead = () => resolve([
+      { name: 'README.md', isDirectory: () => false },
+    ]);
+  });
+  let sleepCount = 0;
+
+  const valuesPromise = listPathCandidates('docs/RE', {
+    cwd: '/tmp',
+    readDir,
+    sleep: async () => {
+      sleepCount += 1;
+      if (sleepCount === 2) resolveRead();
+    },
+    onProgress: (event) => events.push(event),
+  });
+
+  const values = await valuesPromise;
+
   assert.ok(events.some((event) => event.phase === 'loading'));
+  assert.deepEqual(values, ['docs/README.md']);
 });
 
 test('getPseudoProgressPercent should slow down after 80 percent', () => {
@@ -141,4 +189,26 @@ test('getPseudoProgressPercent should slow down after 80 percent', () => {
 test('shouldShowLoading should require at least 300ms', () => {
   assert.equal(shouldShowLoading(299), false);
   assert.equal(shouldShowLoading(300), true);
+});
+
+test('getDot3Frame should cycle one to three dots', () => {
+  assert.equal(getDot3Frame(0), '.  ');
+  assert.equal(getDot3Frame(1), '.. ');
+  assert.equal(getDot3Frame(2), '...');
+  assert.equal(getDot3Frame(3), '.  ');
+});
+
+test('getCommonPrefix should return shared completion prefix', () => {
+  assert.equal(getCommonPrefix(['docs/README.md', 'docs/RELEASE.md']), 'docs/RE');
+  assert.equal(getCommonPrefix(['alpha', 'beta']), '');
+});
+
+test('shouldListCandidatesImmediately should return true when first tab cannot extend the prefix', () => {
+  assert.equal(shouldListCandidatesImmediately(['alpha', 'beta'], ''), true);
+  assert.equal(shouldListCandidatesImmediately(['docs/README.md', 'docs/RELEASE.md'], 'docs/R'), false);
+  assert.equal(shouldListCandidatesImmediately(['docs/README.md'], 'docs/R'), false);
+});
+
+test('formatCandidatePreview should print one candidate per line', () => {
+  assert.equal(formatCandidatePreview(['alpha', 'beta']), 'alpha\nbeta');
 });
