@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGroupedRemoveOptions, formatRemoveOptionLabel, mapLinkStatusToHealth } from '../src/link-remove-select.mjs';
+import { buildGroupedRemoveOptions, formatRemoveOptionLabel } from '../src/link-remove-select.mjs';
+import { formatDoctorLine, formatLinkHealthLabel, mapLinkStatusToHealth } from '../src/link-health-display.mjs';
 
 test('mapLinkStatusToHealth should collapse runtime statuses into three display states', () => {
   assert.equal(mapLinkStatusToHealth('ok'), 'running');
@@ -12,8 +13,19 @@ test('mapLinkStatusToHealth should collapse runtime statuses into three display 
 test('formatRemoveOptionLabel should render concise badge and arrow', () => {
   assert.equal(
     formatRemoveOptionLabel({ health: 'running', src: 'config/a', dst: '~/.a' }),
-    '[ 🟢 ] config/a --> ~/.a',
+    '🟢 config/a --> ~/.a',
   );
+});
+
+test('formatDoctorLine should use same health style without brackets', () => {
+  assert.equal(
+    formatDoctorLine({ module: 'alpha', status: 'missing', srcRaw: 'config/a', dstRaw: '~/.a' }),
+    '🟡 [alpha] config/a --> ~/.a',
+  );
+});
+
+test('formatLinkHealthLabel should render shared health style', () => {
+  assert.equal(formatLinkHealthLabel({ status: 'wrong_target', src: 'a', dst: 'b' }), '🔴 a --> b');
 });
 
 test('buildGroupedRemoveOptions should group links by module and keep stable order', () => {
@@ -24,10 +36,10 @@ test('buildGroupedRemoveOptions should group links by module and keep stable ord
   ]);
 
   assert.deepEqual(Object.keys(grouped), ['alpha', 'beta']);
-  assert.equal(grouped.alpha[0].label, '[ 🔴 ] a1 --> ~/.a1');
+  assert.equal(grouped.alpha[0].label, '🔴 a1 --> ~/.a1');
   assert.deepEqual(grouped.alpha[0].value, { module: 'alpha', index: 1 });
-  assert.equal(grouped.alpha[1].label, '[ 🟢 ] a2 --> ~/.a2');
-  assert.equal(grouped.beta[0].label, '[ 🟡 ] b --> ~/.b');
+  assert.equal(grouped.alpha[1].label, '🟢 a2 --> ~/.a2');
+  assert.equal(grouped.beta[0].label, '🟡 b --> ~/.b');
 });
 
 test('buildGroupedRemoveOptions should merge expanded runtime entries by module and index', () => {
@@ -37,5 +49,5 @@ test('buildGroupedRemoveOptions should merge expanded runtime entries by module 
   ]);
 
   assert.equal(grouped.alpha.length, 1);
-  assert.equal(grouped.alpha[0].label, '[ 🟡 ] config/*.md --> ~/.config/app');
+  assert.equal(grouped.alpha[0].label, '🟡 config/*.md --> ~/.config/app');
 });

@@ -1,26 +1,21 @@
 import { readStore } from './store.mjs';
 import { buildRuntimeEntries, inspectEntry } from './runtime-links.mjs';
+import { formatLinkHealthLabel, mapLinkStatusToHealth } from './link-health-display.mjs';
 
-const HEALTH_META = {
-  running: { icon: '🟢', rank: 0 },
-  standby: { icon: '🟡', rank: 1 },
-  invalid: { icon: '🔴', rank: 2 },
+const HEALTH_RANK = {
+  running: 0,
+  standby: 1,
+  invalid: 2,
 };
 
-export function mapLinkStatusToHealth(status) {
-  if (status === 'ok') return 'running';
-  if (status === 'missing') return 'standby';
-  return 'invalid';
-}
-
 export function formatRemoveOptionLabel({ health, src, dst }) {
-  return `[ ${HEALTH_META[health].icon} ] ${src} --> ${dst}`;
+  return formatLinkHealthLabel({ status: health === 'running' ? 'ok' : health === 'standby' ? 'missing' : 'broken', src, dst });
 }
 
 function mergeEntry(target, entry) {
   const health = mapLinkStatusToHealth(entry.status);
-  const current = target ? HEALTH_META[target.health].rank : -1;
-  const next = HEALTH_META[health].rank;
+  const current = target ? HEALTH_RANK[target.health] : -1;
+  const next = HEALTH_RANK[health];
   if (!target) {
     return {
       module: entry.module,

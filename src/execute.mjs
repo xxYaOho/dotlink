@@ -1,6 +1,7 @@
 import pc from 'picocolors';
 import { lstatSync, mkdirSync, symlinkSync, unlinkSync } from 'fs';
 import { dirname } from 'path';
+import { formatDoctorLine } from './link-health-display.mjs';
 import { readStore } from './store.mjs';
 import { buildRuntimeEntries, inspectEntry } from './runtime-links.mjs';
 
@@ -114,9 +115,7 @@ export async function runDoctor({ module, repoRoot = process.cwd(), scope, fileP
 
   for (const entry of inspected) {
     summary[entry.status] += 1;
-    const marker = entry.status === 'ok' ? pc.green('✓') : pc.yellow('!');
-    const reason = entry.reason ? ` (${entry.reason})` : '';
-    console.log(`${marker} [${entry.module}] ${entry.status} ${entry.dstAbs}${reason}`);
+    console.log(formatDoctorLine(entry));
   }
 
   console.log(
