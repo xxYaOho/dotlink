@@ -90,3 +90,33 @@ test('runPlan should mark wrong_target as replace in update mode', async () => {
   const result = await runPlan({ repoRoot, mode: 'update', scope: 'local' });
   assert.equal(result.summary.replace, 1);
 });
+
+test('runApply should correctly filter by targets', async () => {
+  const repoRoot = makeRepo();
+  const dstA = `${repoRoot}/out/a.txt`;
+  const dstB = `${repoRoot}/out/b.txt`;
+  writeFileSync(join(repoRoot, 'srcfiles', 'b.txt'), 'b', 'utf-8');
+
+  await writeStore(
+    {
+      module: {
+        alpha: {
+          links: [
+            { src: 'srcfiles/a.txt', dst: dstA },
+            { src: 'srcfiles/b.txt', dst: dstB }
+          ],
+        },
+      },
+    },
+    { cwd: repoRoot, scope: 'local' },
+  );
+
+  await runApply({
+    repoRoot,
+    scope: 'local',
+    targets: [{ module: 'alpha', index: 2 }]
+  });
+
+  assert.equal(existsSync(dstB), true, 'dstB should be created because it was targeted');
+  assert.equal(existsSync(dstA), false, 'dstA should remain skipped because it was not targeted');
+});

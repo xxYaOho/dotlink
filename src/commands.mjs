@@ -1,5 +1,8 @@
 import pc from 'picocolors';
 import { readStore, writeStore } from './store.mjs';
+import { existsSync, lstatSync, unlinkSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
 
 function requireText(name, value) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -14,6 +17,28 @@ function requireIndex(value) {
   }
   return value;
 }
+
+function expandHome(pathStr) {
+  if (pathStr === '~') return homedir();
+  if (pathStr.startsWith('~/')) return join(homedir(), pathStr.slice(2));
+  return pathStr;
+}
+
+function tryRemoveSymlink(dstRaw, repoRoot) {
+  let dstAbs = expandHome(dstRaw);
+  if (!dstAbs.startsWith('/')) {
+    dstAbs = join(repoRoot, dstAbs);
+  }
+  try {
+    const stat = lstatSync(dstAbs);
+    if (stat && stat.isSymbolicLink()) {
+      unlinkSync(dstAbs);
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 
 function printWriteResult(result) {
   if (!result.changed) {
@@ -154,6 +179,33 @@ export async function removeLinks({ targets, dryRun = false, repoRoot = process.
 
   const result = await writeStore(data, { cwd: repoRoot, dryRun, scope, filePath });
   printWriteResult(result);
+}
+
+export async function unlinkLinks({ targets, dryRun = false, repoRoot = process.cwd(), scope, filePath }) {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    throw new Error('targets 必须至少包含一条链接');
+  }
+
+  const { data } = readStore(repoRoot, { scope, filePath });
+  
+  for (const target of targets) {
+    const moduleName = requireText('module', target?.module);
+    const oneBasedIndex = requireIndex(target?.index);
+    if (!data.module[moduleName]) {
+      throw new Error(`模块不存在: ${moduleName}`);
+    }
+    const links = data.module[moduleName].links || [];
+    if (!links[oneBasedIndex - 1]) {
+      throw new Error(`index 超出范围: ${moduleName}#${oneBasedIndex}`);
+    }
+    const dst = links[oneBasedIndex - 1].dst;
+    
+    if (!dryRun) {
+      tryRemoveSymlink(dst, repoRoot);
+    } else {
+      console.log(pc.yellow(`dry-run: (unlink) ${dst}`));
+    }
+  }
 }
 
 export async function updateLink({ module, index, src, dst, dryRun = false }) {

@@ -17,9 +17,16 @@ function toAction(status, mode) {
 }
 
 function listInspected(module, repoRoot, options = {}) {
-  const { scope, filePath } = options;
+  const { scope, filePath, targets } = options;
   const { data } = readStore(repoRoot, { scope, filePath });
-  const runtimeEntries = buildRuntimeEntries(data, { repoRoot, moduleFilter: module });
+  let runtimeEntries = buildRuntimeEntries(data, { repoRoot, moduleFilter: module });
+  
+  if (targets && Array.isArray(targets) && targets.length > 0) {
+    runtimeEntries = runtimeEntries.filter(entry => 
+      targets.some(t => t.module === entry.module && t.index === entry.index)
+    );
+  }
+  
   return runtimeEntries.map((entry) => inspectEntry(entry));
 }
 
@@ -39,8 +46,8 @@ function makeSummary(steps) {
   return summary;
 }
 
-export async function runPlan({ module, mode = 'update', repoRoot = process.cwd(), scope, filePath }) {
-  const inspected = listInspected(module, repoRoot, { scope, filePath });
+export async function runPlan({ module, mode = 'update', repoRoot = process.cwd(), scope, filePath, targets }) {
+  const inspected = listInspected(module, repoRoot, { scope, filePath, targets });
   const steps = inspected.map((entry) => ({
     ...entry,
     action: toAction(entry.status, mode),
@@ -88,8 +95,9 @@ export async function runApply({
   repoRoot = process.cwd(),
   scope,
   filePath,
+  targets
 }) {
-  const planned = await runPlan({ module, mode, repoRoot, scope, filePath });
+  const planned = await runPlan({ module, mode, repoRoot, scope, filePath, targets });
   if (dryRun) {
     console.log(pc.yellow('dry-run: 未执行实际写入'));
     return planned;
